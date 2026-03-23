@@ -1,0 +1,15 @@
+version: v2
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/lukas/ai-aggregator/go-service/gen
+plugins:
+  # Go protobuf
+  - remote: buf.build/protocolbuffers/go
+    out: ../go-service/gen
+    opt: paths=source_relative
+  # Go gRPC
+  - remote: buf.build/grpc/go
+    out: ../go-service/gen
+    opt: paths=source_relative

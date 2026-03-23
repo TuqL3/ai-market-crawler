@@ -1,0 +1,18 @@
+[project]
+name = "ai-aggregator-python"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "grpcio>=1.60.0",
+    "grpcio-tools>=1.60.0",
+    "protobuf>=5.26.0,<7.0",
+    "asyncpg>=0.30.0",
+    "numpy>=1.26.0",
+]
+
+[project.optional-dependencies]
+ai = [
+    "anthropic>=0.40.0",
+    "scikit-learn>=1.4.0",
+    "hdbscan>=0.8.33",
+]

@@ -1,0 +1,12 @@
+.env
+*.exe
+*.dll
+*.so
+*.dylib
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+.next/
+dist/
+vendor/

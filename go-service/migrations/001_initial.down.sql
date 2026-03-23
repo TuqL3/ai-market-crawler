@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS chat_messages;
+DROP TABLE IF EXISTS chat_sessions;
+DROP TABLE IF EXISTS problem_embeddings;
+DROP TABLE IF EXISTS trend_snapshots;
+DROP TABLE IF EXISTS cluster_members;
+DROP TABLE IF EXISTS problem_clusters;
+DROP TABLE IF EXISTS classified_problems;
+DROP TABLE IF EXISTS crawl_jobs;
+DROP TABLE IF EXISTS raw_problems;

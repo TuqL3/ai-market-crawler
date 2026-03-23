@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go version:*)",
+      "Bash(docker --version)",
+      "Bash(docker compose:*)",
+      "Bash(protoc --version)",
+      "Bash(buf --version)",
+      "Bash(docker exec:*)",
+      "Bash(go mod:*)",
+      "Bash(DATABASE_URL=\"postgres://appuser:apppass@localhost:5432/ai_aggregator\" go run cmd/api/main.go)",
+      "Bash(go install:*)",
+      "Bash(~/go/bin/buf --version)",
+      "Bash(~/go/bin/buf lint:*)",
+      "Bash(~/go/bin/buf generate:*)",
+      "Bash(cd:*)",
+      "Bash(pip3 install:*)",
+      "Bash(rm -f python-service/gen/aggregator/v1/*.py)",
+      "Bash(python3 -m grpc_tools.protoc -Iproto --python_out=python-service/gen --grpc_python_out=python-service/gen proto/aggregator/v1/analysis.proto proto/aggregator/v1/chat.proto)",
+      "Bash(curl:*)",
+      "Bash(go get:*)",
+      "Bash(DATABASE_URL=\"postgres://postgres:postgres@localhost:5432/ai_aggregator?sslmode=disable\" PYTHON_GRPC_ADDR=\"localhost:50052\" timeout 10 go run cmd/api/main.go)",
+      "Bash(DATABASE_URL=\"postgres://postgres:postgres@localhost:5432/ai_aggregator?sslmode=disable\" PYTHON_GRPC_ADDR=\"localhost:50052\" timeout 8 go run cmd/api/main.go)"
+    ]
+  }
+}

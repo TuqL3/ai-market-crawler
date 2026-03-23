@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package aggregator.v1;
+
+option go_package = "aggregator/v1";
+
+service ChatService {
+  rpc Ask(AskRequest) returns (AskResponse);
+  rpc AskStream(AskStreamRequest) returns (stream AskStreamResponse);
+}
+
+message AskRequest {
+  string session_id = 1;
+  string question = 2;
+}
+
+message Source {
+  string title = 1;
+  string url = 2;
+  string source = 3;
+  float relevance = 4;
+}
+
+message AskResponse {
+  string answer = 1;
+  repeated Source sources = 2;
+}
+
+message AskStreamRequest {
+  string session_id = 1;
+  string question = 2;
+}
+
+message AskStreamResponse {
+  string content = 1;
+  bool done = 2;
+  repeated Source sources = 3;
+}
