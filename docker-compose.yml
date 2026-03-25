@@ -30,15 +30,15 @@ services:
       postgres:
         condition: service_healthy
 
-  go-service:
-    build: ./go-service
-    container_name: ai-aggregator-go
+  go-api:
+    build:
+      context: ./go-service
+      target: api
+    container_name: ai-aggregator-api
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
       PYTHON_GRPC_ADDR: python-service:50052
       GO_API_PORT: "8080"
-      GITHUB_TOKEN: ${GITHUB_TOKEN}
-      STACKOVERFLOW_API_KEY: ${STACKOVERFLOW_API_KEY}
     ports:
       - "8080:8080"
     depends_on:
@@ -46,6 +46,33 @@ services:
         condition: service_healthy
       python-service:
         condition: service_started
+
+  go-crawler:
+    build:
+      context: ./go-service
+      target: crawler
+    container_name: ai-aggregator-crawler
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      PYTHON_GRPC_ADDR: python-service:50052
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GO_CRAWLER_ENABLED: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      python-service:
+        condition: service_started
+
+  frontend:
+    build: ./frontend
+    container_name: ai-aggregator-frontend
+    environment:
+      NEXT_PUBLIC_GRAPHQL_URL: http://go-api:8080/graphql
+      NEXT_PUBLIC_GRAPHQL_WS_URL: ws://go-api:8080/graphql
+    ports:
+      - "3000:3000"
+    depends_on:
+      - go-api
 
 volumes:
   pgdata:
