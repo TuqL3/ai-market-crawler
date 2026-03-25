@@ -6,9 +6,11 @@ import (
 )
 
 type Config struct {
-	DatabaseURL    string
-	PythonGRPCAddr string
-	APIPort        string
+	DatabaseURL      string
+	PythonGRPCAddr   string
+	APIPort          string
+	GitHubToken      string
+	GoCrawlerEnabled bool
 }
 
 func Load() (*Config, error) {
@@ -27,9 +29,21 @@ func Load() (*Config, error) {
 		apiPort = "8080"
 	}
 
+	gitHubToken := os.Getenv("GITHUB_TOKEN")
+	if gitHubToken == "" {
+		return nil, fmt.Errorf("GITHUB_TOKEN is required")
+	}
+
+	goCrawlerEnabled := os.Getenv("GO_CRAWLER_ENABLED")
+	if goCrawlerEnabled == "" {
+		goCrawlerEnabled = "true"
+	}
+
 	return &Config{
-		DatabaseURL:    dbURL,
-		PythonGRPCAddr: pythonAddr,
-		APIPort:        apiPort,
+		DatabaseURL:      dbURL,
+		PythonGRPCAddr:   pythonAddr,
+		APIPort:          apiPort,
+		GitHubToken:      gitHubToken,
+		GoCrawlerEnabled: goCrawlerEnabled != "false",
 	}, nil
 }
