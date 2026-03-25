@@ -18,6 +18,7 @@ func Load() (*Config, error) {
 	if dbURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")
 	}
+	fmt.Println("DATABASE_URL:", dbURL)
 
 	pythonAddr := os.Getenv("PYTHON_GRPC_ADDR")
 	if pythonAddr == "" {
