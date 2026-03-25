@@ -39,7 +39,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to auto migrate: %v", err)
 	}
-	log.Println("Database migrated ✓")
+	log.Println("Database migrated")
 
 	ctx := context.Background()
 	grpcClient, err := grpcclient.New(ctx, cfg.PythonGRPCAddr)

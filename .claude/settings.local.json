@@ -20,7 +20,8 @@
       "Bash(curl:*)",
       "Bash(go get:*)",
       "Bash(DATABASE_URL=\"postgres://postgres:postgres@localhost:5432/ai_aggregator?sslmode=disable\" PYTHON_GRPC_ADDR=\"localhost:50052\" timeout 10 go run cmd/api/main.go)",
-      "Bash(DATABASE_URL=\"postgres://postgres:postgres@localhost:5432/ai_aggregator?sslmode=disable\" PYTHON_GRPC_ADDR=\"localhost:50052\" timeout 8 go run cmd/api/main.go)"
+      "Bash(DATABASE_URL=\"postgres://postgres:postgres@localhost:5432/ai_aggregator?sslmode=disable\" PYTHON_GRPC_ADDR=\"localhost:50052\" timeout 8 go run cmd/api/main.go)",
+      "Bash(go build:*)"
     ]
   }
 }
