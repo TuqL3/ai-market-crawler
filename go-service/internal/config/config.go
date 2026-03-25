@@ -29,12 +29,8 @@ func Load() (*Config, error) {
 		apiPort = "8080"
 	}
 
-	gitHubToken := os.Getenv("GITHUB_TOKEN")
-	if gitHubToken == "" {
-		return nil, fmt.Errorf("GITHUB_TOKEN is required")
-	}
-
 	goCrawlerEnabled := os.Getenv("GO_CRAWLER_ENABLED")
+	gitHubToken := os.Getenv("GITHUB_TOKEN")
 	if goCrawlerEnabled == "" {
 		goCrawlerEnabled = "true"
 	}

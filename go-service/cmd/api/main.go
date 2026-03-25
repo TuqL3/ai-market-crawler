@@ -10,7 +10,6 @@ import (
 	pb "github.com/lukas/ai-aggregator/go-service/gen/aggregator/v1"
 	"github.com/lukas/ai-aggregator/go-service/internal/config"
 	"github.com/lukas/ai-aggregator/go-service/internal/grpcclient"
-	"github.com/lukas/ai-aggregator/go-service/internal/models"
 	"github.com/lukas/ai-aggregator/go-service/internal/store"
 )
 
@@ -26,20 +25,6 @@ func main() {
 	}
 	defer db.Close()
 	log.Println("Go → Postgres ✓")
-
-	err = db.DB.AutoMigrate(
-		&models.RawProblem{},
-		&models.ClassifiedProblem{},
-		&models.ProblemCluster{},
-		&models.TrendSnapshot{},
-		&models.ChatSession{},
-		&models.ChatMessage{},
-		&models.CrawlJob{},
-	)
-	if err != nil {
-		log.Fatalf("Failed to auto migrate: %v", err)
-	}
-	log.Println("Database migrated")
 
 	ctx := context.Background()
 	grpcClient, err := grpcclient.New(ctx, cfg.PythonGRPCAddr)
