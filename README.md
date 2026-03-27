@@ -445,3 +445,8 @@ NEXT_PUBLIC_GRAPHQL_WS_URL=ws://localhost:8080/graphql
 - **Apollo Client**: Cache management, optimistic UI, GraphQL subscriptions cho real-time chat
 - **Streaming gRPC cho chat**: Claude trả tokens từng phần → stream qua gRPC → GraphQL subscription → real-time UX
 - **Rate limit strategy**: Mỗi platform có limit riêng (GitHub 5000/h, SO 10000/day, Reddit 1 req/s) → per-source limiter
+
+## Run Project
+```
+docker compose up -d
+```
