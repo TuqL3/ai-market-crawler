@@ -10,10 +10,6 @@ dependencies = [
     "numpy>=1.26.0",
     "sqlalchemy[asyncio]>=2.0.0",
     "pgvector>=0.3.0",
-]
-
-[project.optional-dependencies]
-ai = [
     "anthropic>=0.40.0",
     "scikit-learn>=1.4.0",
     "hdbscan>=0.8.33",

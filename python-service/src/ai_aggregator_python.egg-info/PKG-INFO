@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: ai-aggregator-python
+Version: 0.1.0
+Requires-Python: >=3.11
+Requires-Dist: grpcio>=1.60.0
+Requires-Dist: grpcio-tools>=1.60.0
+Requires-Dist: protobuf<7.0,>=5.26.0
+Requires-Dist: asyncpg>=0.30.0
+Requires-Dist: numpy>=1.26.0
+Requires-Dist: sqlalchemy[asyncio]>=2.0.0
+Requires-Dist: pgvector>=0.3.0
+Requires-Dist: anthropic>=0.40.0
+Requires-Dist: scikit-learn>=1.4.0
+Requires-Dist: hdbscan>=0.8.33
