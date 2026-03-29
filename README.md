@@ -26,7 +26,7 @@ Hệ thống AI crawl GitHub Issues, StackOverflow, Reddit để tổng hợp c�
 | Component | Technology | Mục đích |
 |-----------|-----------|----------|
 | Crawler + API Gateway | **Go** (gqlgen, chi, gorm, robfig/cron) | Crawl data, GraphQL API, WebSocket, scheduling |
-| AI Processing | **Python** (anthropic SDK, scikit-learn) | Phân loại, clustering, trend detection, RAG |
+| AI Processing | **Python** (anthropic SDK, scikit-learn, SQLAlchemy 2.0) | Phân loại, clustering, trend detection, RAG |
 | Communication | **gRPC** (buf) | Go ↔ Python service |
 | Database | **PostgreSQL + pgvector** | Lưu trữ data + vector embeddings |
 | Frontend | **Next.js + TypeScript + Tailwind + Apollo Client** | Dashboard + Chat UI (GraphQL) |

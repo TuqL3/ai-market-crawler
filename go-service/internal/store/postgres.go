@@ -100,3 +100,34 @@ func (s *Store) FailCrawlJob(ctx context.Context, jobID uuid.UUID, errMsg string
 	}
 	return nil
 }
+
+func (s *Store) GetUnclassifiedProblems(ctx context.Context, limit int) ([]models.RawProblem, error) {
+	var problems []models.RawProblem
+	err := s.DB.WithContext(ctx).
+		Where("id NOT IN (SELECT raw_problem_id FROM classified_problems)").
+		Order("crawled_at DESC").
+		Limit(limit).
+		Find(&problems).Error
+	return problems, err
+}
+
+func (s *Store) SaveClassifications(ctx context.Context, classifications []models.ClassifiedProblem) error {
+	if len(classifications) == 0 {
+		return nil
+	}
+	result := s.DB.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "raw_problem_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"category", "subcategories", "confidence", "classified_at"}),
+	}).Create(&classifications)
+	return result.Error
+}
+
+func (s *Store) GetUnembeddedProblems(ctx context.Context, limit int) ([]models.RawProblem, error) {
+	var problems []models.RawProblem
+	err := s.DB.WithContext(ctx).
+		Where("id NOT IN (SELECT raw_problem_id FROM problem_embeddings)").
+		Order("crawled_at DESC").
+		Limit(limit).
+		Find(&problems).Error
+	return problems, err
+}
