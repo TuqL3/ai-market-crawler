@@ -25,7 +25,7 @@ Hệ thống AI crawl GitHub Issues, StackOverflow, Reddit để tổng hợp c�
 
 | Component | Technology | Mục đích |
 |-----------|-----------|----------|
-| Crawler + API Gateway | **Go** (gqlgen, chi, gorm, robfig/cron) | Crawl data, GraphQL API, WebSocket, scheduling |
+| Crawler + API Gateway | **Go** (gqlgen, gin, gorm, robfig/cron) | Crawl data, GraphQL API, WebSocket, scheduling |
 | AI Processing | **Python** (anthropic SDK, scikit-learn, SQLAlchemy 2.0) | Phân loại, clustering, trend detection, RAG |
 | Communication | **gRPC** (buf) | Go ↔ Python service |
 | Database | **PostgreSQL + pgvector** | Lưu trữ data + vector embeddings |
@@ -62,7 +62,7 @@ ai-marketplace/
 │   │   │   └── reddit.go              # Reddit API crawler (OAuth2)
 │   │   ├── scheduler/scheduler.go     # Cron-based job scheduling
 │   │   ├── api/
-│   │   │   ├── router.go              # HTTP router (chi) + GraphQL endpoint
+│   │   │   ├── router.go              # HTTP router (gin) + GraphQL endpoint
 │   │   │   └── middleware/            # CORS, rate limit, logging
 │   │   ├── graph/
 │   │   │   ├── schema.graphqls        # GraphQL schema definition
@@ -367,7 +367,7 @@ input ProblemFilter {
 1. Setup gqlgen: schema definition (`schema.graphqls`), code generation
 2. Implement resolvers: queries (problems, clusters, trends, categories), mutations (chat)
 3. GraphQL subscriptions cho real-time chat streaming → gRPC `ChatService.AskStream`
-4. Mount GraphQL handler trên Chi router (`/graphql`, `/playground`)
+4. Mount GraphQL handler trên Gin router (`/graphql`, `/playground`)
 5. Middleware: CORS, rate limiting (`golang.org/x/time/rate`), structured logging
 6. Pagination: cursor-based hoặc offset-based cho lists
 
@@ -441,7 +441,7 @@ NEXT_PUBLIC_GRAPHQL_WS_URL=ws://localhost:8080/graphql
 - **pgvector thay vì vector DB riêng** (Pinecone, Qdrant): đơn giản, 1 database duy nhất, đủ cho scale hiện tại
 - **buf thay vì protoc trực tiếp**: quản lý dependencies, linting, code gen dễ hơn
 - **GraphQL thay vì REST**: Flexible queries, frontend chỉ fetch đúng data cần thiết, nested relationships (problem → cluster → trends) trong 1 request
-- **gqlgen (schema-first)**: Type-safe, auto-generate resolvers từ schema, tích hợp tốt với Go ecosystem
+- **gqlgen (schema-first) + Gin**: Type-safe, auto-generate resolvers từ schema, mount trên Gin router đã có sẵn
 - **Apollo Client**: Cache management, optimistic UI, GraphQL subscriptions cho real-time chat
 - **Streaming gRPC cho chat**: Claude trả tokens từng phần → stream qua gRPC → GraphQL subscription → real-time UX
 - **Rate limit strategy**: Mỗi platform có limit riêng (GitHub 5000/h, SO 10000/day, Reddit 1 req/s) → per-source limiter

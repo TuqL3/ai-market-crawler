@@ -25,3 +25,14 @@ func MapIssueToProblem(issue *github.Issue) models.RawProblem {
 		Tags:          tags,
 	}
 }
+
+func JoinStrings(ss []string) string {
+	result := ""
+	for i, s := range ss {
+		if i > 0 {
+			result += ","
+		}
+		result += s
+	}
+	return result
+}
