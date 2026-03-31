@@ -1,9 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(find /mnt/e/MyProject/ai-maket-crawler/python-service -name README* -o -name *.md -o -name *.txt -o -name .env*)",
-      "Bash(find /mnt/e/MyProject/ai-maket-crawler -name *.proto)",
-      "Bash(grep -v \"^$\")"
+      "Bash(find /mnt/e/MyProject/ai-maket-crawler/python-service -name README* -o -name *.md -o -name *.txt -o -name .env*)"
     ]
   }
 }
