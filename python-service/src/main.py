@@ -34,8 +34,8 @@ async def serve():
         AnalysisServicer(db=db, api_key=Config.ANTHROPIC_API_KEY), server
     )
     chat_pb2_grpc.add_ChatServiceServicer_to_server(
-        ChatServicer(), server
-    )
+      ChatServicer(db=db, api_key=Config.ANTHROPIC_API_KEY), server
+  )
 
     listen_addr = f"0.0.0.0:{Config.GRPC_PORT}"
     server.add_insecure_port(listen_addr)

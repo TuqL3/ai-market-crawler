@@ -2,9 +2,12 @@ package graph
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/graphql-go/graphql"
+	"github.com/lukas/ai-aggregator/go-service/internal/grpcclient"
 	"github.com/lukas/ai-aggregator/go-service/internal/store"
+	pb "github.com/lukas/ai-aggregator/go-service/gen/aggregator/v1"
 )
 
 func problemsResolver(s *store.Store) graphql.FieldResolveFn {
@@ -99,19 +102,27 @@ func createChatSessionResolver(s *store.Store) graphql.FieldResolveFn {
 	}
 }
 
-func sendMessageResolver(s *store.Store) graphql.FieldResolveFn {
+func sendMessageResolver(s *store.Store, grpcClient *grpcclient.Client) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (interface{}, error) {
 		sessionID, _ := p.Args["sessionId"].(string)
 		content, _ := p.Args["content"].(string)
 
-		// Lưu message của user
+		// Lưu user message
 		_, err := s.CreateChatMessage(context.Background(), sessionID, "user", content)
 		if err != nil {
 			return nil, err
 		}
 
-		// TODO: Phase 5 sẽ gọi gRPC ChatService.Ask ở đây
-		// Tạm thời trả về placeholder response
-		return s.CreateChatMessage(context.Background(), sessionID, "assistant", "Chat will be implemented in Phase 5")
+		// Gọi gRPC ChatService.Ask
+		resp, err := grpcClient.Chat.Ask(context.Background(), &pb.AskRequest{
+			SessionId: sessionID,
+			Question:  content,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("chat service error: %w", err)
+		}
+
+		// Lưu assistant message
+		return s.CreateChatMessage(context.Background(), sessionID, "assistant", resp.Answer)
 	}
 }

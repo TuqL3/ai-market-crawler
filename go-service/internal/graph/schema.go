@@ -2,10 +2,11 @@ package graph
 
 import (
 	"github.com/graphql-go/graphql"
+	"github.com/lukas/ai-aggregator/go-service/internal/grpcclient"
 	"github.com/lukas/ai-aggregator/go-service/internal/store"
 )
 
-func NewSchema(s *store.Store) (graphql.Schema, error) {
+func NewSchema(s *store.Store, grpcClient *grpcclient.Client) (graphql.Schema, error) {
 	queryType := graphql.NewObject(graphql.ObjectConfig{
 		Name: "Query",
 		Fields: graphql.Fields{
@@ -74,7 +75,7 @@ func NewSchema(s *store.Store) (graphql.Schema, error) {
 					"sessionId": &graphql.ArgumentConfig{Type: graphql.NewNonNull(graphql.ID)},
 					"content":   &graphql.ArgumentConfig{Type: graphql.NewNonNull(graphql.String)},
 				},
-				Resolve: sendMessageResolver(s),
+				Resolve: sendMessageResolver(s, grpcClient),
 			},
 		},
 	})
