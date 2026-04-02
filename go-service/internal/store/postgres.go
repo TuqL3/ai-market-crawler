@@ -143,7 +143,7 @@ func (s *Store) GetProblems(ctx context.Context, filter map[string]interface{}, 
 		query = query.Where("source = ?", source)
 	}
 	if category, ok := filter["category"].(string); ok && category != "" {
-		query = query.Where("id IN (SELECT raw_problem_id FROM classified_problem WHERE category = ?)", category)
+		query = query.Where("id IN (SELECT raw_problem_id FROM classified_problems WHERE category = ?)", category)
 	}
 	if tags, ok := filter["tags"].([]interface{}); ok && len(tags) > 0 {
 		tagStrings := make([]string, len(tags))
