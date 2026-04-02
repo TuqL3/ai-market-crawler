@@ -24,10 +24,9 @@ class EmbeddingStore:
                 await self.db.execute(queue, problem_id, vec_str)
                 count += 1
             except Exception as e:
-                logger.error(f"Failed to save embedding fo {problem_id}: {e}")
-            logger.info(f"Saved {count}/{len(embeddings)} embeddings")
-            return count
-        return None
+                logger.error(f"Failed to save embedding for {problem_id}: {e}")
+        logger.info(f"Saved {count}/{len(embeddings)} embeddings")
+        return count
 
     async def search_similar(self, query_embedding: List[float], top_k: int = 10) -> List[dict]:
         vec_str = "[" + ",".join(str(v) for v in query_embedding) + "]"

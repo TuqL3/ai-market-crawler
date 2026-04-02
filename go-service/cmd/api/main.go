@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/lukas/ai-aggregator/go-service/internal/api"
 	"github.com/lukas/ai-aggregator/go-service/internal/config"
+	"github.com/lukas/ai-aggregator/go-service/internal/grpcclient"
 	"github.com/lukas/ai-aggregator/go-service/internal/store"
 )
 
@@ -21,7 +23,15 @@ func main() {
 	defer db.Close()
 	log.Println("Go → Postgres ✓")
 
-	r, err := api.NewRouter(db)
+	ctx := context.Background()
+	grpcClient, err := grpcclient.New(ctx, cfg.PythonGRPCAddr)
+	if err != nil {
+		log.Fatalf("Failed to connect to Python service: %v", err)
+	}
+	defer grpcClient.Close()
+	log.Println("Go → Python gRPC ✓")
+
+	r, err := api.NewRouter(db, grpcClient)
 	if err != nil {
 		log.Fatalf("Failed to create router: %v", err)
 	}
