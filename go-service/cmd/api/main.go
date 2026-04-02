@@ -1,15 +1,10 @@
 package main
 
 import (
-	"context"
 	"log"
-	"net/http"
 
-	"github.com/gin-gonic/gin"
-
-	pb "github.com/lukas/ai-aggregator/go-service/gen/aggregator/v1"
+	"github.com/lukas/ai-aggregator/go-service/internal/api"
 	"github.com/lukas/ai-aggregator/go-service/internal/config"
-	"github.com/lukas/ai-aggregator/go-service/internal/grpcclient"
 	"github.com/lukas/ai-aggregator/go-service/internal/store"
 )
 
@@ -26,32 +21,16 @@ func main() {
 	defer db.Close()
 	log.Println("Go → Postgres ✓")
 
-	ctx := context.Background()
-	grpcClient, err := grpcclient.New(ctx, cfg.PythonGRPCAddr)
+	r, err := api.NewRouter(db)
 	if err != nil {
-		log.Fatalf("Failed to connect to Python service: %v", err)
+		log.Fatalf("Failed to create router: %v", err)
 	}
-	defer grpcClient.Close()
-
-	resp, err := grpcClient.Analysis.ClassifyProblems(ctx, &pb.ClassifyProblemsRequest{
-		Problems: []*pb.ProblemInput{
-			{Id: "test-1", Title: "Test problem", Body: "This is a test"},
-		},
-	})
-	if err != nil {
-		log.Printf("Warning: gRPC test call failed: %v", err)
-	} else {
-		log.Printf("Go → Python gRPC ✓ (got %d classifications)", len(resp.Classifications))
-	}
-
-	r := gin.Default()
-
-	r.GET("/healthz", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-	})
 
 	addr := ":" + cfg.APIPort
 	log.Printf("API server starting on %s", addr)
+	log.Printf("GraphQL:    http://localhost%s/graphql", addr)
+	log.Printf("Playground: http://localhost%s/playground", addr)
+
 	if err := r.Run(addr); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
