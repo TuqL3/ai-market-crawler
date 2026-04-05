@@ -1,144 +1,163 @@
-# AI Problem Aggregator - Implementation Plan
+# AI Problem Aggregator
 
 ## Tổng quan
-Hệ thống AI crawl GitHub Issues, StackOverflow, Reddit để tổng hợp các vấn đề phổ biến mà developers đang gặp phải. Người dùng xem trending problems trên dashboard và chat với AI.
+
+Hệ thống AI crawl GitHub Issues để tổng hợp các vấn đề phổ biến mà developers đang gặp phải. Người dùng xem trending problems trên dashboard và chat với AI (RAG) dựa trên data crawl thực tế.
 
 ## Kiến trúc hệ thống
 
 ```
-┌─────────────┐ GraphQL ┌──────────────┐         ┌────────────────┐
-│  Next.js    │  /WS    │  Go Service  │  gRPC   │ Python Service │
-│  Frontend   │◄───────►│  - Crawler   │◄───────►│  - AI/NLP      │
-│  - Dashboard│         │  - GraphQL   │         │  - RAG Chat    │
-│  - Chat     │         │  - Scheduler │         │  - Clustering  │
-└─────────────┘         └──────┬───────┘         └───────┬────────┘
-                               │                         │
-                               └────────┬────────────────┘
-                                        ▼
-                                  ┌──────────┐
-                                  │ Postgres │
-                                  │ +pgvector│
-                                  └──────────┘
+                  WebSocket              HTTP SSE
+Frontend ◄────────────────► Go Service ────────────────► Python Service
+                            │                            (FastAPI)
+                            │         RabbitMQ
+                            │ ─────────────────────────► Python Service
+                            │  (classify, embed,         (consumer)
+                            │   cluster, trends)
+                            │
+                            ▼
+                      ┌──────────┐
+                      │ Postgres │
+                      │ +pgvector│
+                      └──────────┘
+```
+
+### Luồng dữ liệu
+
+```
+1. CRAWL (mỗi 30 phút)
+   Go Crawler ──► GitHub API ──► Lưu raw_problems vào DB
+
+2. AI ANALYSIS (async qua RabbitMQ)
+   Go publish ──► RabbitMQ ──► Python consume:
+   - ClassifyProblems: phân loại vào 12 categories (Claude API)
+   - EmbedProblems: tạo vector embeddings (Voyage API)
+   - ClusterProblems: gom nhóm bằng HDBSCAN
+   - DetectTrends: phát hiện vấn đề đang tăng
+   - SummarizeCluster: tóm tắt + key themes + solutions
+
+3. AI CHAT (real-time qua HTTP SSE)
+   User hỏi ──► WebSocket ──► Go ──► HTTP SSE ──► Python (FastAPI)
+   Python: embed câu hỏi → search pgvector → Claude trả lời → stream chunks
+   Go nhận chunks ──► forward qua WebSocket ──► Frontend hiển thị
 ```
 
 ## Tech Stack
 
 | Component | Technology | Mục đích |
 |-----------|-----------|----------|
-| Crawler + API Gateway | **Go** (gqlgen, gin, gorm, robfig/cron) | Crawl data, GraphQL API, WebSocket, scheduling |
-| AI Processing | **Python** (anthropic SDK, scikit-learn, SQLAlchemy 2.0) | Phân loại, clustering, trend detection, RAG |
-| Communication | **gRPC** (buf) | Go ↔ Python service |
+| Crawler + API Gateway | **Go** (gin, gqlgen, gorm, robfig/cron) | Crawl GitHub, GraphQL API, WebSocket server |
+| AI Processing | **Python** (FastAPI, anthropic SDK, scikit-learn, SQLAlchemy) | Phân loại, clustering, trend detection, RAG chat |
+| Async Messaging | **RabbitMQ** | Go → Python async tasks (analysis pipeline) |
+| Real-time Chat | **HTTP SSE** (Go → Python) + **WebSocket** (Frontend → Go) | Chat streaming |
 | Database | **PostgreSQL + pgvector** | Lưu trữ data + vector embeddings |
-| Frontend | **Next.js + TypeScript + Tailwind + Apollo Client** | Dashboard + Chat UI (GraphQL) |
-| DevOps | **Docker Compose** | Local development |
+| Frontend | **Next.js + TypeScript + Tailwind + Apollo Client** | Dashboard + Chat UI |
+| Monitoring | **Prometheus + Grafana + Loki** | Metrics, dashboard, centralized logging |
+| CI/CD | **GitHub Actions** | Lint, test, build, deploy |
+| DevOps | **Docker Compose** | Local development + deployment |
 
 ## Cấu trúc thư mục
 
 ```
-ai-marketplace/
+ai-problem-aggregator/
 ├── docker-compose.yml
-├── Makefile
 ├── .env.example
+├── .github/
+│   └── workflows/
+│       ├── go-service.yml             # CI/CD cho Go service
+│       ├── python-service.yml         # CI/CD cho Python service
+│       └── frontend.yml               # CI/CD cho Frontend
 │
-├── proto/                              # gRPC definitions (shared)
-│   ├── buf.yaml
-│   ├── buf.gen.yaml
-│   └── aggregator/v1/
-│       ├── analysis.proto              # ClassifyProblems, ClusterProblems, DetectTrends, SummarizeCluster, EmbedProblems
-│       └── chat.proto                  # Ask, AskStream (server-side streaming)
-│
-├── go-service/                         # Go: Crawler + API Gateway
+├── go-service/
 │   ├── Dockerfile
-│   ├── go.mod / go.sum
+│   ├── go.mod
 │   ├── cmd/
-│   │   ├── api/main.go                # API gateway entrypoint
-│   │   └── crawler/main.go            # Crawler/scheduler entrypoint
+│   │   ├── api/main.go                # API gateway + WebSocket server
+│   │   └── crawler/main.go            # Crawler + scheduler
 │   ├── internal/
-│   │   ├── config/config.go           # Env/yaml config loading
+│   │   ├── config/config.go
 │   │   ├── crawler/
-│   │   │   ├── crawler.go             # Crawler interface
-│   │   │   ├── github.go              # GitHub Issues crawler (go-github)
-│   │   │   ├── stackoverflow.go       # StackExchange API crawler
-│   │   │   └── reddit.go              # Reddit API crawler (OAuth2)
-│   │   ├── scheduler/scheduler.go     # Cron-based job scheduling
+│   │   │   └── github.go              # GitHub Issues crawler
+│   │   ├── scheduler/scheduler.go     # Cron jobs
 │   │   ├── api/
-│   │   │   ├── router.go              # HTTP router (gin) + GraphQL endpoint
-│   │   │   └── middleware/            # CORS, rate limit, logging
+│   │   │   ├── router.go              # HTTP router + GraphQL + WebSocket
+│   │   │   └── middleware/
 │   │   ├── graph/
-│   │   │   ├── schema.graphqls        # GraphQL schema definition
-│   │   │   ├── schema.resolvers.go    # Query/Mutation/Subscription resolvers
-│   │   │   ├── model/models_gen.go    # Generated GraphQL models
-│   │   │   └── generated.go           # gqlgen generated runtime
-│   │   ├── grpcclient/client.go       # gRPC client to Python service
-│   │   ├── store/                     # Postgres queries (pgx)
-│   │   │   ├── postgres.go            # Connection pool
+│   │   │   ├── schema.graphqls
+│   │   │   └── resolvers.go
+│   │   ├── rabbitmq/
+│   │   │   ├── publisher.go           # Publish tasks to RabbitMQ
+│   │   │   └── consumer.go            # Consume results from Python
+│   │   ├── store/
+│   │   │   ├── postgres.go
 │   │   │   ├── problems.go
-│   │   │   ├── crawldata.go
 │   │   │   └── chat.go
-│   │   └── models/                    # Go structs
-│   ├── gen/aggregator/v1/             # Generated gRPC Go code
+│   │   └── models/
 │   └── migrations/
-│       ├── 001_initial.up.sql
-│       └── 001_initial.down.sql
 │
-├── python-service/                     # Python: AI/NLP Processing
+├── python-service/
 │   ├── Dockerfile
 │   ├── pyproject.toml
 │   ├── src/
-│   │   ├── main.py                    # gRPC server entrypoint
+│   │   ├── main.py                    # FastAPI server + RabbitMQ consumer
 │   │   ├── config.py
-│   │   ├── grpc_server/
-│   │   │   ├── analysis_servicer.py   # Implements AnalysisService
-│   │   │   └── chat_servicer.py       # Implements ChatService
+│   │   ├── api/
+│   │   │   └── chat.py                # SSE endpoint: /chat/stream
 │   │   ├── ai/
 │   │   │   ├── classifier.py          # Problem classification (Claude API)
-│   │   │   ├── clusterer.py           # Similarity clustering (embeddings + HDBSCAN)
-│   │   │   ├── trend_detector.py      # Trend detection (growth rate)
+│   │   │   ├── clusterer.py           # HDBSCAN clustering
+│   │   │   ├── trend_detector.py      # Trend detection
 │   │   │   ├── summarizer.py          # Cluster summarization (Claude API)
-│   │   │   └── rag.py                 # RAG pipeline for chat
+│   │   │   └── rag.py                 # RAG pipeline cho chat
+│   │   ├── rabbitmq/
+│   │   │   ├── consumer.py            # Consume tasks from Go
+│   │   │   └── publisher.py           # Publish results
 │   │   ├── embeddings/store.py        # pgvector operations
-│   │   └── db/connection.py           # Async postgres connection
-│   ├── gen/aggregator/v1/             # Generated gRPC Python code
+│   │   └── db/connection.py
 │   └── tests/
 │
-└── frontend/                           # Next.js Frontend
+├── monitoring/
+│   ├── prometheus/prometheus.yml      # Prometheus config + scrape targets
+│   ├── grafana/
+│   │   ├── provisioning/              # Auto-provision datasources + dashboards
+│   │   └── dashboards/               # Dashboard JSON files
+│   └── loki/loki-config.yml          # Loki config
+│
+└── frontend/
     ├── Dockerfile
     ├── package.json
-    ├── src/
-    │   ├── app/
-    │   │   ├── layout.tsx
-    │   │   ├── page.tsx               # Dashboard home
-    │   │   ├── problems/
-    │   │   │   ├── page.tsx           # Problem list + filters
-    │   │   │   └── [id]/page.tsx      # Problem detail
-    │   │   └── chat/page.tsx          # Chat interface
-    │   ├── components/
-    │   │   ├── dashboard/             # TrendChart, CategoryFilter, ProblemCard, StatsOverview
-    │   │   ├── chat/                  # ChatWindow, MessageBubble, ChatInput
-    │   │   └── ui/                    # Shared UI primitives (shadcn)
-    │   ├── hooks/
-    │   │   ├── useProblems.ts
-    │   │   ├── useTrends.ts
-    │   │   └── useChat.ts            # WebSocket hook
-    │   ├── lib/
-    │   │   ├── apollo.ts              # Apollo Client setup
-    │   │   ├── graphql/
-    │   │   │   ├── queries.ts         # GraphQL queries
-    │   │   │   ├── mutations.ts       # GraphQL mutations
-    │   │   │   └── subscriptions.ts   # GraphQL subscriptions (chat)
-    │   │   └── ws.ts                  # WebSocket client
-    │   └── types/index.ts
-    └── public/
+    └── apps/web/
+        ├── app/
+        │   ├── layout.tsx
+        │   ├── page.tsx               # Dashboard - trending problems
+        │   ├── problems/
+        │   │   ├── page.tsx           # Problem list + filters
+        │   │   └── [id]/page.tsx      # Problem detail + cluster info
+        │   └── chat/page.tsx          # AI chat interface
+        ├── components/
+        │   ├── dashboard/             # TrendChart, CategoryFilter, ProblemCard, StatsOverview
+        │   ├── chat/                  # ChatWindow, MessageBubble, ChatInput
+        │   └── ui/                    # Shared UI (shadcn)
+        ├── hooks/
+        │   ├── useProblems.ts
+        │   ├── useTrends.ts
+        │   └── useChat.ts
+        └── lib/
+            ├── apollo.ts
+            └── graphql/
+                ├── queries.ts
+                ├── mutations.ts
+                └── subscriptions.ts
 ```
 
 ## Database Schema
 
 ### raw_problems
-Dữ liệu crawl thô từ các nguồn.
+Dữ liệu crawl thô từ GitHub.
 ```sql
 CREATE TABLE raw_problems (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    source          VARCHAR(20) NOT NULL,       -- github, stackoverflow, reddit
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    source          VARCHAR(20) NOT NULL,
     source_id       VARCHAR(255) NOT NULL,
     url             TEXT NOT NULL,
     title           TEXT NOT NULL,
@@ -157,7 +176,7 @@ CREATE TABLE raw_problems (
 Kết quả phân loại bởi AI.
 ```sql
 CREATE TABLE classified_problems (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     raw_problem_id  UUID NOT NULL REFERENCES raw_problems(id) ON DELETE CASCADE,
     category        VARCHAR(100) NOT NULL,
     subcategories   TEXT[],
@@ -171,7 +190,7 @@ CREATE TABLE classified_problems (
 Nhóm các problems tương tự.
 ```sql
 CREATE TABLE problem_clusters (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     label           VARCHAR(255) NOT NULL,
     summary         TEXT,
     key_themes      TEXT[],
@@ -193,7 +212,7 @@ CREATE TABLE cluster_members (
 Dữ liệu trending theo time window.
 ```sql
 CREATE TABLE trend_snapshots (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     cluster_id      UUID REFERENCES problem_clusters(id),
     label           VARCHAR(255),
     problem_count   INTEGER,
@@ -208,7 +227,7 @@ CREATE TABLE trend_snapshots (
 Vector embeddings cho RAG chat.
 ```sql
 CREATE TABLE problem_embeddings (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     raw_problem_id  UUID NOT NULL REFERENCES raw_problems(id) ON DELETE CASCADE,
     embedding       vector(1536),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -220,15 +239,15 @@ CREATE TABLE problem_embeddings (
 Lịch sử chat.
 ```sql
 CREATE TABLE chat_sessions (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE chat_messages (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id      UUID NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
-    role            VARCHAR(20) NOT NULL,        -- user, assistant
+    role            VARCHAR(20) NOT NULL,
     content         TEXT NOT NULL,
     sources         JSONB,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -239,7 +258,7 @@ CREATE TABLE chat_messages (
 Tracking trạng thái crawl.
 ```sql
 CREATE TABLE crawl_jobs (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source          VARCHAR(20) NOT NULL,
     status          VARCHAR(20) NOT NULL DEFAULT 'pending',
     items_crawled   INTEGER DEFAULT 0,
@@ -250,62 +269,61 @@ CREATE TABLE crawl_jobs (
 );
 ```
 
-## gRPC Services
+## RabbitMQ Queues
 
-### AnalysisService (analysis.proto)
-```protobuf
-service AnalysisService {
-  rpc ClassifyProblems(ClassifyRequest) returns (ClassifyResponse);
-  rpc ClusterProblems(ClusterRequest) returns (ClusterResponse);
-  rpc DetectTrends(TrendRequest) returns (TrendResponse);
-  rpc SummarizeCluster(SummarizeRequest) returns (SummarizeResponse);
-  rpc EmbedProblems(EmbedRequest) returns (EmbedResponse);
-}
+| Queue | Publisher | Consumer | Mục đích |
+|-------|-----------|----------|----------|
+| `problem.classify` | Go (sau khi crawl) | Python | Phân loại problems vào categories |
+| `problem.embed` | Go (sau khi crawl) | Python | Tạo vector embeddings |
+| `problem.cluster` | Go (scheduler, mỗi 6h) | Python | Gom nhóm problems tương tự |
+| `problem.trends` | Go (scheduler, mỗi 6h) | Python | Phát hiện trends |
+| `problem.summarize` | Go (sau khi cluster) | Python | Tóm tắt clusters |
+| `analysis.result` | Python (sau khi xử lý) | Go | Trả kết quả về Go lưu DB |
+
+## HTTP SSE Endpoint (Chat)
+
+Python FastAPI cung cấp endpoint cho chat streaming:
+
 ```
+POST /chat/stream
+Content-Type: application/json
+Accept: text/event-stream
 
-### ChatService (chat.proto)
-```protobuf
-service ChatService {
-  rpc Ask(AskRequest) returns (AskResponse);
-  rpc AskStream(AskRequest) returns (stream AskChunk);  // Streaming cho real-time chat
+Request:
+{
+    "session_id": "uuid",
+    "question": "React hydration bug là gì?"
 }
+
+Response (SSE):
+data: {"content": "React hydration"}
+data: {"content": " bug xảy ra khi..."}
+data: {"content": "...", "done": true, "sources": [...]}
 ```
 
 ## GraphQL API
 
 **Endpoints:**
-- `POST /graphql` — GraphQL queries & mutations
-- `GET /playground` — GraphQL Playground (dev only)
-- `WS /graphql` — GraphQL subscriptions (chat streaming)
-
-### Schema Overview
+- `POST /graphql` — Queries & Mutations
+- `WS /graphql` — WebSocket (chat streaming)
 
 ```graphql
 type Query {
-  # Problems
   problems(filter: ProblemFilter, page: Int, pageSize: Int): ProblemConnection!
   problem(id: ID!): RawProblem
-
-  # Clusters
   clusters(page: Int, pageSize: Int): ClusterConnection!
   cluster(id: ID!): ProblemCluster
-
-  # Trends & Categories
   trends(windowDays: Int): [TrendSnapshot!]!
   categories: [CategoryCount!]!
-
-  # Chat
   chatHistory(sessionId: ID!): [ChatMessage!]!
 }
 
 type Mutation {
-  # Chat
   createChatSession: ChatSession!
   sendMessage(sessionId: ID!, content: String!): ChatMessage!
 }
 
 type Subscription {
-  # Real-time chat streaming (replaces WebSocket)
   messageStream(sessionId: ID!): ChatChunk!
 }
 
@@ -321,96 +339,118 @@ input ProblemFilter {
 
 ## Các Phase triển khai
 
-### Phase 1: Foundation
-> Mục tiêu: Skeleton chạy được, các service giao tiếp được với nhau.
+### Phase 1: DevOps Foundation
+> Mục tiêu: CI/CD + Docker sẵn sàng trước khi code.
 
-1. Init monorepo: `go mod init`, `pyproject.toml`, `npx create-next-app`, `docker-compose.yml`
-2. Viết proto files + buf config → generate Go/Python stubs
-3. SQL migration `001_initial.up.sql` (dùng golang-migrate)
-4. Go: config loading + Postgres connection pool (pgx)
-5. Python: minimal gRPC server (stub responses)
-6. Go: gRPC client kết nối Python service
-7. Docker Compose: postgres (pgvector/pgvector:pg16), go-service, python-service, frontend
-8. **Verify**: Go → Postgres ✓, Go → Python gRPC ✓
+**Docker:**
+1. Multi-stage Dockerfile cho Go, Python, Frontend
+2. docker-compose.yml: postgres (pgvector), rabbitmq, go-service, python-service, frontend
+3. .dockerignore tối ưu build context
+4. Health checks cho mỗi service
+5. Docker Compose profiles: `dev`, `prod`
 
-### Phase 2: Crawlers
-> Mục tiêu: Data chảy vào database từ cả 3 nguồn.
+**CI/CD (GitHub Actions):**
+1. Pipeline cho mỗi service:
+   - Lint + test → Build Docker image → Push lên Container Registry
+   - Auto trigger khi push/merge vào main
+2. Database migration tự động trong CI
+3. Environment: staging + production branches
 
-1. Define `Crawler` interface trong Go:
-   ```go
-   type Crawler interface {
-       Crawl(ctx context.Context, since time.Time) ([]models.RawProblem, error)
-       Source() string
-   }
-   ```
-2. GitHub crawler: `go-github` library, search issues by labels (bug, help wanted), pagination, rate limit handling
-3. StackOverflow crawler: StackExchange API `/questions`, filter by activity/votes, quota management
-4. Reddit crawler: OAuth2 client credentials → `/r/{subreddit}/search`, 1s delay between requests
-5. Scheduler: `robfig/cron` — GitHub mỗi 30 phút, SO mỗi 1 giờ, Reddit mỗi 1 giờ
-6. Upsert logic: `ON CONFLICT (source, source_id) DO UPDATE`
-7. Crawl job tracking trong `crawl_jobs` table
+**Verify**: `docker compose up -d` → tất cả services chạy + kết nối nhau ✓
 
-### Phase 3: AI Processing Pipeline
+### Phase 2: Foundation
+> Mục tiêu: Skeleton chạy được, services giao tiếp qua RabbitMQ + HTTP.
+
+1. Setup RabbitMQ trong docker-compose
+2. Go: RabbitMQ publisher/consumer (amqp091-go)
+3. Python: FastAPI + RabbitMQ consumer (aio-pika)
+4. Database migration (giữ nguyên schema hiện tại)
+5. Bỏ toàn bộ gRPC: proto files, generated code, grpcclient
+6. **Verify**: Go → Postgres ✓, Go → RabbitMQ → Python ✓, Go → Python HTTP SSE ✓
+
+### Phase 3: Crawlers
+> Mục tiêu: Data chảy vào database từ GitHub.
+
+1. GitHub crawler: search issues by labels (bug, help wanted), pagination, rate limit
+2. Scheduler: robfig/cron — crawl mỗi 30 phút
+3. Sau mỗi crawl batch → publish messages vào RabbitMQ (classify + embed)
+4. Upsert logic: ON CONFLICT (source, source_id) DO UPDATE
+5. Crawl job tracking
+6. **Verify**: GitHub issues chảy vào DB liên tục ✓
+
+### Phase 4: AI Processing Pipeline
 > Mục tiêu: Data được phân loại, clustering, phát hiện trends.
 
-1. **Classifier** (`classifier.py`): Claude API + structured prompt → JSON categories
-2. **Embeddings** (`embeddings/store.py`): pgvector via asyncpg, lưu vector 1536-dim
-3. **Clusterer** (`clusterer.py`): Embeddings + HDBSCAN cho initial clustering, Claude cho label generation
-4. **Trend Detector** (`trend_detector.py`): So sánh cluster sizes giữa time windows, tính growth rate
-5. **Summarizer** (`summarizer.py`): Claude → summary, key themes, common solutions
-6. Wire up gRPC `analysis_servicer.py`
-7. Go trigger: sau mỗi crawl batch → `ClassifyProblems` + `EmbedProblems`; mỗi 6h → `ClusterProblems` + `DetectTrends`
-
-### Phase 4: GraphQL API Gateway
-> Mục tiêu: Frontend có GraphQL API để query.
-
-1. Setup gqlgen: schema definition (`schema.graphqls`), code generation
-2. Implement resolvers: queries (problems, clusters, trends, categories), mutations (chat)
-3. GraphQL subscriptions cho real-time chat streaming → gRPC `ChatService.AskStream`
-4. Mount GraphQL handler trên Gin router (`/graphql`, `/playground`)
-5. Middleware: CORS, rate limiting (`golang.org/x/time/rate`), structured logging
-6. Pagination: cursor-based hoặc offset-based cho lists
+1. Python RabbitMQ consumers:
+   - `problem.classify` → Classifier (Claude API) → publish result
+   - `problem.embed` → Embedding (Voyage API) → lưu pgvector
+   - `problem.cluster` → HDBSCAN clustering → publish result
+   - `problem.trends` → Growth rate detection → publish result
+   - `problem.summarize` → Claude summarization → publish result
+2. Go RabbitMQ consumer: nhận results từ `analysis.result` → lưu DB
+3. Go scheduler: mỗi 6h publish cluster + trends tasks
+4. **Verify**: Crawl → tự động classify + embed → mỗi 6h cluster + trends ✓
 
 ### Phase 5: RAG Chat
-> Mục tiêu: User hỏi → AI trả lời dựa trên crawled data.
+> Mục tiêu: User chat với AI dựa trên data crawl.
 
-1. RAG pipeline (`rag.py`):
-   - Nhận question → generate embedding
-   - Query pgvector top-K similar problems (cosine similarity)
-   - Build context từ matched problems (title, body, source, URL)
-   - Call Claude với system prompt + context + user question
-   - Stream response
-2. gRPC `chat_servicer.py` wiring
-3. **E2E**: GraphQL Subscription → Go resolver → gRPC AskStream → RAG → streamed response → WebSocket → UI
+1. Python FastAPI endpoint `/chat/stream` (SSE):
+   - Nhận question → embed → search pgvector top-K
+   - Build context từ matched problems
+   - Call Claude với context → stream response
+2. Go WebSocket handler:
+   - Frontend gửi message qua WS
+   - Go gọi Python `/chat/stream` → nhận SSE chunks
+   - Forward chunks qua WS về Frontend
+3. Chat history: lưu messages vào DB
+4. **Verify**: User hỏi → AI trả lời dựa trên GitHub issues thật ✓
 
 ### Phase 6: Frontend
 > Mục tiêu: Dashboard và Chat UI hoàn chỉnh.
 
-1. Next.js + TypeScript + Tailwind + Apollo Client setup
-2. **Dashboard** (`/`):
-   - `StatsOverview`: tổng problems, active clusters, sources breakdown
-   - `TrendChart`: recharts line/bar chart trending clusters
-   - `ProblemCard` list: latest/top problems với source badges, category tags
-   - `CategoryFilter` sidebar: filter by category, source, date range
-3. **Problem Detail** (`/problems/[id]`):
-   - Full text, metadata, link gốc
+1. **Dashboard** (`/`):
+   - StatsOverview: tổng problems, active clusters, sources
+   - TrendChart: trending clusters (recharts)
+   - ProblemCard list: latest problems với category tags
+   - CategoryFilter sidebar
+
+2. **Problem Detail** (`/problems/[id]`):
+   - Full text, metadata, link gốc GitHub
    - Related problems cùng cluster
-   - Cluster summary
-4. **Chat** (`/chat`):
-   - `ChatWindow` + message history
-   - `ChatInput` với submit
-   - `useChat` hook: GraphQL subscription lifecycle, reconnection, message state
-   - `MessageBubble`: render markdown (react-markdown), source citations clickable
-5. Responsive layout, dark mode
+   - Cluster summary + key themes
 
-### Phase 7: Polish & Production
-> Mục tiêu: Production-ready.
+3. **Chat** (`/chat`):
+   - ChatWindow + message history
+   - WebSocket streaming
+   - Source citations (link đến GitHub issues)
+   - Markdown rendering
 
-1. Structured logging (Go: `slog`, Python: `structlog`)
-2. Health checks: `/healthz`, `/readyz`
-3. Prometheus metrics: crawl counts, processing latency, API durations
-4. Multi-stage Dockerfiles (build + runtime)
-5. Integration tests: Docker Postgres + mock HTTP cho crawlers
+### Phase 7: Monitoring & Production
+> Mục tiêu: Observability + deploy lên cloud.
+
+**Monitoring & Observability:**
+1. **Prometheus**: metrics từ Go (gin-prometheus), Python (prometheus-fastapi), RabbitMQ (rabbitmq_exporter)
+2. **Grafana**: dashboard — crawl rate, queue depth, API latency, AI processing time
+3. **Loki + Promtail**: centralized logging
+4. **Alerting**: queue depth bất thường, crawl fail, API error rate cao
+
+**Code Quality:**
+1. Structured logging (Go: slog, Python: structlog)
+2. Error handling + retry cho RabbitMQ consumers
+3. Dead letter queue cho failed messages
+
+**Cloud Deploy:**
+1. VPS (DigitalOcean/Vultr/AWS Lightsail):
+   - Docker Compose trên 1 VPS
+   - Nginx reverse proxy + SSL (Let's Encrypt)
+2. Hoặc Kubernetes khi cần scale:
+   - Helm charts, HPA cho Go API + Python workers
+   - Managed PostgreSQL + Managed RabbitMQ
+
+**Backup & Recovery:**
+1. PostgreSQL automated backup (pg_dump cron)
+2. RabbitMQ durable queues + persistent messages
+3. Disaster recovery plan
 
 ## Environment Variables (.env.example)
 
@@ -420,33 +460,32 @@ DATABASE_URL=postgres://user:pass@localhost:5432/ai_aggregator
 
 # API Keys
 GITHUB_TOKEN=ghp_xxx
-STACKOVERFLOW_API_KEY=xxx
-REDDIT_CLIENT_ID=xxx
-REDDIT_CLIENT_SECRET=xxx
 ANTHROPIC_API_KEY=sk-ant-xxx
 
+# RabbitMQ
+RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+
 # Services
-PYTHON_GRPC_ADDR=python-service:50052
+PYTHON_SERVICE_URL=http://python-service:8000
 GO_API_PORT=8080
-GO_CRAWLER_ENABLED=true
 
 # Frontend
 NEXT_PUBLIC_GRAPHQL_URL=http://localhost:8080/graphql
-NEXT_PUBLIC_GRAPHQL_WS_URL=ws://localhost:8080/graphql
+NEXT_PUBLIC_WS_URL=ws://localhost:8080/ws
 ```
 
 ## Key Design Decisions
 
-- **2 Go binaries riêng biệt** (api + crawler): scaling khác nhau - API scale theo traffic, crawler chỉ cần 1 instance
-- **pgvector thay vì vector DB riêng** (Pinecone, Qdrant): đơn giản, 1 database duy nhất, đủ cho scale hiện tại
-- **buf thay vì protoc trực tiếp**: quản lý dependencies, linting, code gen dễ hơn
-- **GraphQL thay vì REST**: Flexible queries, frontend chỉ fetch đúng data cần thiết, nested relationships (problem → cluster → trends) trong 1 request
-- **gqlgen (schema-first) + Gin**: Type-safe, auto-generate resolvers từ schema, mount trên Gin router đã có sẵn
-- **Apollo Client**: Cache management, optimistic UI, GraphQL subscriptions cho real-time chat
-- **Streaming gRPC cho chat**: Claude trả tokens từng phần → stream qua gRPC → GraphQL subscription → real-time UX
-- **Rate limit strategy**: Mỗi platform có limit riêng (GitHub 5000/h, SO 10000/day, Reddit 1 req/s) → per-source limiter
+- **RabbitMQ thay gRPC cho analysis pipeline**: Async, retry tự động, decouple Go/Python, scale workers độc lập
+- **HTTP SSE cho chat streaming**: Đơn giản, không cần protobuf/code generation, Python dùng FastAPI native
+- **WebSocket (Frontend ↔ Go)**: Real-time chat UI, Go làm proxy + auth + rate limit
+- **pgvector thay vì vector DB riêng**: 1 database duy nhất, đủ cho scale hiện tại
+- **GraphQL (gqlgen + Gin)**: Flexible queries, frontend fetch đúng data cần
+- **Dead letter queue**: Messages fail nhiều lần → chuyển sang DLQ để debug, không mất data
+- **DevOps first**: CI/CD + Docker setup trước khi code, đảm bảo mọi thay đổi đều qua pipeline
 
 ## Run Project
-```
+
+```bash
 docker compose up -d
 ```

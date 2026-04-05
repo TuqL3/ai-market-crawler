@@ -1,7 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash(find /mnt/e/MyProject/ai-maket-crawler/python-service -name README* -o -name *.md -o -name *.txt -o -name .env*)"
+      "Bash(find /mnt/e/MyProject/ai-maket-crawler/python-service -name README* -o -name *.md -o -name *.txt -o -name .env*)",
+      "Bash(cat /mnt/e/MyProject/ai-maket-crawler/go-service/internal/api/middleware/*.go)",
+      "Bash(go vet:*)",
+      "Bash(python -m py_compile src/embeddings/store.py)",
+      "Bash(python -m py_compile src/grpc_server/chat_servicer.py)",
+      "Bash(python -m py_compile src/main.py)",
+      "Bash(python3 -m py_compile src/embeddings/store.py)",
+      "Bash(python3 -m py_compile src/grpc_server/chat_servicer.py)",
+      "Bash(python3 -m py_compile src/main.py)",
+      "Bash(find /mnt/e/MyProject/ai-maket-crawler -name \"Dockerfile*\" -exec cat {} +)"
     ]
   }
 }
